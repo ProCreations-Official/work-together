@@ -22,7 +22,7 @@ Without one of those steps the Gemini agent will surface an authentication error
 
 ### Qwen CLI setup
 
-The Qwen agent calls `qwen -p "..."`. Install the CLI (`npm install -g @qwen-code/qwen-code`) and either rely on its cached login or provide a key in `QWEN_API_KEY` / `DASHSCOPE_API_KEY`. You can override the model with `qwenModel` in `config.toml`; the default is `qwen3-coder-plus` (supports command-line prompts and code generation).citeturn1search0turn1search1
+The Qwen agent calls `qwen -p "..."`. Install the CLI (`npm install -g @qwen-code/qwen-code`) and either rely on its cached login or provide a key in `QWEN_API_KEY` / `DASHSCOPE_API_KEY`. You can override the model with `qwenModel` in `config.toml`; the default is `qwen3-coder-plus` (supports command-line prompts and code generation).
 
 ### Agent-to-agent messaging
 
