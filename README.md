@@ -2,7 +2,9 @@
 
 A collaborative CLI that coordinates multiple AI coding agents – Claude Code, OpenAI Codex, Gemini CLI, Qwen Code, and OpenCode – to plan, negotiate, and execute development tasks in real time.
 
-
+```bash
+bash -c 'git clone https://github.com/ProCreations-Official/work-together.git && cd work-together && npm install && npm start'
+```
 
 ## Development
 
