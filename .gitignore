@@ -1,0 +1,25 @@
+# Node modules & build artifacts
+node_modules/
+dist/
+coverage/
+.nyc_output/
+
+# Logs and temporary files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# Editor & OS files
+.DS_Store
+.idea/
+.vscode/
+
+# Env files
+.env
+.env.*
+
+# Work-together runtime data
+.work-together/
+.work-together.log
+

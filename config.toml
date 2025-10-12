@@ -1,0 +1,29 @@
+# Sample Work-Together CLI configuration
+# Copy this file to ~/.work-together/config.toml to customize behavior.
+
+[apiKeys]
+#claude = "your-anthropic-api-key"
+#codex = "your-openai-api-key"
+#gemini = "your-google-api-key"
+#qwen = "your-dashscope-or-qwen-api-key"
+#opencode = "your-opencode-api-key"
+
+[settings]
+# When true, the CLI skips the agent selection prompt and launches the agents listed in defaultAgents.
+autoSelectAgents = false
+# Agents available: "claude", "codex", "gemini", "qwen", "opencode"
+defaultAgents = ["claude", "codex"]
+autoOpenSettingsOnStart = false
+geminiModel = "gemini-2.5-flash-latest"
+geminiUseVertex = false
+geminiUseApiKey = false
+qwenModel = "qwen3-coder-plus"
+qwenUseApiKey = false
+enableWebSearchAgent = true
+webSearchModel = "codex"
+
+[preferences]
+colorScheme = "default"
+updateFrequencyMs = 1000
+actionTimeoutMs = 0
+webSearchTimeoutMs = 0

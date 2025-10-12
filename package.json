@@ -1,0 +1,51 @@
+{
+  "name": "work-together",
+  "version": "0.1.0",
+  "description": "Coordinator CLI enabling Claude Code, OpenAI Codex, and OpenCode agents to collaborate on coding tasks.",
+  "type": "module",
+  "bin": {
+    "work-together": "./src/index.js"
+  },
+  "scripts": {
+    "start": "node ./src/index.js",
+    "dev": "NODE_ENV=development node ./src/index.js",
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest --runInBand",
+    "lint": "eslint ."
+  },
+  "keywords": [
+    "cli",
+    "ai",
+    "agents",
+    "coordination",
+    "coding"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-code": "^1.0.0",
+    "@openai/codex-sdk": "^0.46.0",
+    "@opencode-ai/sdk": "^0.3.0",
+    "chalk": "^5.3.0",
+    "date-fns": "^2.30.0",
+    "dotenv": "^16.4.5",
+    "fs-extra": "^11.2.0",
+    "ink": "^5.2.1",
+    "ink-text-input": "^6.0.0",
+    "ora": "^8.0.1",
+    "pino": "^9.0.0",
+    "prompts": "^2.4.2",
+    "react": "^18.3.1",
+    "strip-ansi": "^7.1.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.12.7",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-import": "^2.29.1",
+    "jest": "^29.7.0"
+  }
+}
