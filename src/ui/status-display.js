@@ -150,6 +150,8 @@ export function AgentProgress({ session, progress, phase }) {
   const phaseMap = {
     'idle': 'READY',
     'planning': 'PLANNING',
+    'variant': 'VARIANT',
+    'variant-selection': 'SELECTION',
     'execution': 'EXECUTING',
     'complete': 'COMPLETE',
     'error': 'ERROR'
@@ -160,10 +162,10 @@ export function AgentProgress({ session, progress, phase }) {
 
     // Generate status based on phase and actionType
     let displayStatus = item.status;
-    if (phase === 'idle') {
-      displayStatus = item.status && item.status !== 'waiting' ? item.status : 'Waiting...';
-    } else if (phase === 'planning' && item.actionType === 'plan') {
-      // During planning, show simplified status
+    if (phase === 'variant-selection') {
+      displayStatus = 'Awaiting variant choice';
+    } else if ((phase === 'planning' || phase === 'variant') && item.actionType === 'plan') {
+      // During planning/variant, show simplified status
       if (item.status.includes('ready') || item.status.includes('Plan ready')) {
         displayStatus = '✓ Plan ready';
       } else if (item.status.includes('Negotiating') || item.status.includes('split')) {
@@ -177,6 +179,8 @@ export function AgentProgress({ session, progress, phase }) {
       } else if (item.status.includes('Executing')) {
         displayStatus = '⚙ Working...';
       }
+    } else if (phase === 'idle') {
+      displayStatus = item.status && item.status !== 'waiting' ? item.status : 'Waiting...';
     }
 
     return React.createElement(

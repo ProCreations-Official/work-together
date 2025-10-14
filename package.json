@@ -1,5 +1,5 @@
 {
-  "name": "work-together",
+  "name": "@procreations-official/work-together",
   "version": "0.1.0",
   "description": "Coordinator CLI enabling Claude Code, OpenAI Codex, and OpenCode agents to collaborate on coding tasks.",
   "type": "module",
@@ -19,8 +19,21 @@
     "coordination",
     "coding"
   ],
-  "author": "",
+  "author": "ProCreations Official",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ProCreations-Official/work-together.git"
+  },
+  "homepage": "https://github.com/ProCreations-Official/work-together#readme",
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=18.0.0"
   },

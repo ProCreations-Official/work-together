@@ -25,7 +25,13 @@ function CoordinatorApp({ coordinator, config, session }) {
   const [turnNumber, setTurnNumber] = useState(0);
   const [waitingForInput, setWaitingForInput] = useState(false);
   const [inputValue, setInputValue] = useState('');
+  const [variantSelectionRequest, setVariantSelectionRequest] = useState(null);
   const lastStatusRef = useRef({});
+  const [collaborationMode, setCollaborationMode] = useState(() =>
+    typeof coordinator.getCollaborationMode === 'function'
+      ? coordinator.getCollaborationMode()
+      : 'collaborative'
+  );
 
   const shouldSupersedeStatus = (previousDescription = '', nextDescription = '') => {
     const prev = previousDescription.toLowerCase();
@@ -217,7 +223,55 @@ function CoordinatorApp({ coordinator, config, session }) {
       config.logger?.info({ stage: update.stage, hasPlan: !!update.plan, hasAlloc: !!update.allocation, hasAssign: !!update.assignments }, 'UI: Planning update received');
 
       // Show planning updates in Planning panel (separate from user messages)
-      if (update.stage === 'initial-plan' && update.plan) {
+      if (update.stage === 'variant-proposal' && update.plan) {
+        setPlanningFeed((prev) => {
+          const next = [
+            ...prev,
+            {
+              timestamp: update.timestamp,
+              agentId: update.agentId,
+              message: `🧪 VARIANT: ${update.plan}`
+            },
+          ];
+          return next.length > 50 ? next.slice(next.length - 50) : next;
+        });
+      } else if (update.stage === 'variant-results' && update.plan) {
+        setPlanningFeed((prev) => {
+          const next = [
+            ...prev,
+            {
+              timestamp: update.timestamp,
+              agentId: update.agentId,
+              message: `📦 RESULTS: ${update.plan}`
+            },
+          ];
+          return next.length > 50 ? next.slice(next.length - 50) : next;
+        });
+      } else if (update.stage === 'variant-selection-request' && update.plan) {
+        setPlanningFeed((prev) => {
+          const next = [
+            ...prev,
+            {
+              timestamp: update.timestamp,
+              agentId: update.agentId,
+              message: `❓ SELECT: ${update.plan}`
+            },
+          ];
+          return next.length > 50 ? next.slice(next.length - 50) : next;
+        });
+      } else if (update.stage === 'variant-selected' && update.plan) {
+        setPlanningFeed((prev) => {
+          const next = [
+            ...prev,
+            {
+              timestamp: update.timestamp,
+              agentId: update.agentId,
+              message: `✅ CHOSEN: ${update.plan}`
+            },
+          ];
+          return next.length > 50 ? next.slice(next.length - 50) : next;
+        });
+      } else if (update.stage === 'initial-plan' && update.plan) {
         setPlanningFeed((prev) => {
           const next = [
             ...prev,
@@ -271,6 +325,18 @@ function CoordinatorApp({ coordinator, config, session }) {
       }
 
     });
+    const unsubscribeVariantSelection = coordinator.subscribeToVariantSelection((request) => {
+      if (!request) return;
+      const optionSummary = request.options
+        .map((option) => `${option.index}. ${option.agentName || option.agentId}`)
+        .join(' • ');
+      setVariantSelectionRequest(request);
+      setError(null);
+      setPhase('variant-selection');
+      setWaitingForInput(true);
+      setInputValue('');
+      setNotice(`Variant mode: choose a plan (${optionSummary}). Enter number, agent id, or "auto".`);
+    });
 
     config.logger?.info('UI: Subscriptions set up complete');
 
@@ -278,6 +344,7 @@ function CoordinatorApp({ coordinator, config, session }) {
       config.logger?.info('UI: Cleaning up subscriptions');
       unsubscribeStatus();
       unsubscribePlanning();
+      unsubscribeVariantSelection();
     };
   }, [coordinator, config.logger]);
 
@@ -294,7 +361,7 @@ function CoordinatorApp({ coordinator, config, session }) {
 
       try {
         config.logger?.info('UI: Starting planning phase');
-        setPhase('planning');
+        setPhase(collaborationMode === 'variant' ? 'variant' : 'planning');
         // Clear progress when starting planning
         setProgress({});
         setWaitingForInput(false);
@@ -334,7 +401,7 @@ function CoordinatorApp({ coordinator, config, session }) {
     return () => {
       cancelled = true;
     };
-  }, [coordinator, turnNumber, session.agents, config.logger]);
+  }, [coordinator, turnNumber, session.agents, config.logger, collaborationMode]);
 
   useInput((input, key) => {
     if (key.ctrl && input === 'c') {
@@ -354,6 +421,47 @@ function CoordinatorApp({ coordinator, config, session }) {
       setNotice(`Log: ${coordinator.statusLogger?.filePath || 'not created yet'}`);
       return;
     }
+    if (key.ctrl && (input === 'v' || input === 'V')) {
+      const previousMode = collaborationMode;
+      const previousSelection = variantSelectionRequest;
+      const nextMode = previousMode === 'variant' ? 'collaborative' : 'variant';
+      setNotice(`Toggling collaboration mode to ${nextMode}…`);
+      setError(null);
+      const applyToggle = async () => {
+        try {
+          if (typeof coordinator.setCollaborationMode === 'function') {
+            coordinator.setCollaborationMode(nextMode);
+          }
+          setCollaborationMode(nextMode);
+          if (nextMode === 'collaborative') {
+            setVariantSelectionRequest(null);
+          }
+          if (typeof config.save === 'function') {
+            await config.save({ settings: { collaborationMode: nextMode } });
+          } else if (config.settings) {
+            config.settings.collaborationMode = nextMode;
+          }
+          const timingNote =
+            phase === 'planning' || phase === 'variant' || phase === 'execution'
+              ? ' (takes effect after the current run completes)'
+              : '';
+          setNotice(`Collaboration mode set to ${nextMode}${timingNote}.`);
+        } catch (err) {
+          if (typeof coordinator.setCollaborationMode === 'function') {
+            coordinator.setCollaborationMode(previousMode);
+          }
+          setCollaborationMode(previousMode);
+          if (previousMode === 'variant' && previousSelection) {
+            setVariantSelectionRequest(previousSelection);
+          }
+          const message = err instanceof Error ? err.message : String(err);
+          setError(message);
+          setNotice('Failed to toggle collaboration mode.');
+        }
+      };
+      applyToggle();
+      return;
+    }
     if (key.tab) {
       setFocusIndex((prev) => (prev + 1) % 3);
       return;
@@ -371,6 +479,24 @@ function CoordinatorApp({ coordinator, config, session }) {
       return;
     }
 
+    if (variantSelectionRequest) {
+      const result = typeof coordinator.submitVariantSelection === 'function'
+        ? coordinator.submitVariantSelection(variantSelectionRequest.requestId, trimmed)
+        : { success: false, error: 'Variant selection unavailable.' };
+      if (result.success) {
+        setVariantSelectionRequest(null);
+        setWaitingForInput(false);
+        setNotice(result.message || 'Variant choice accepted.');
+        setError(null);
+        setPhase(collaborationMode === 'variant' ? 'variant' : phase);
+      } else {
+        setNotice(result.error || 'Unable to accept variant choice.');
+        setWaitingForInput(true);
+      }
+      setInputValue('');
+      return;
+    }
+
     setWaitingForInput(false);
     setInputValue('');
     setTurnNumber((prev) => prev + 1);
@@ -384,7 +510,7 @@ function CoordinatorApp({ coordinator, config, session }) {
     setProgress({});
 
     // Kick off planning via effect loop
-    setPhase('planning');
+    setPhase(collaborationMode === 'variant' ? 'variant' : 'planning');
   };
 
   const focusedStyles = useMemo(

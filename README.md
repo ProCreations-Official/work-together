@@ -35,6 +35,18 @@ During any phase, agents can coordinate by emitting lines in their responses:
 
 With only two agents the system automatically routes messages to the other collaborator. When three or more agents are active, the sender can choose between group broadcasts and direct messages using the formats above.
 
+### Variant mode
+
+Set `collaborationMode = "variant"` in `~/.work-together/config.toml` to have every agent build a full solution independently. Variant runs unfold as:
+
+1. **Solo builds** – the coordinator creates a workspace named `variant-{project-slug}-{session}` with subfolders like `{agent-name}-{project-name}` (for example `claude-code-auth-api`). Each agent gets a private brief pointing to their folder and completes the entire task there with no cross-agent coordination.
+2. **Result review** – once everyone is done the planning feed shows 📦 `RESULTS` with each project folder. When `variantSelectionMode = "manual"` (default) the CLI pauses so you can pick a final result by number or agent id, or enter `auto` to delegate. With `variantSelectionMode = "auto"` the review agent’s variant is adopted automatically.
+3. **Handoff** – the selected variant is highlighted as ✅ `CHOSEN` together with the target directory so you can inspect, run, or promote it. No collaborative execution phase runs afterwards because every variant already contains a complete build.
+
+Press <kbd>Ctrl</kbd>+<kbd>V</kbd> at any time to toggle between collaborative and variant modes; the change is saved to `config.toml` and takes effect on the next run if one is already in progress.
+
+Switch back to collaborative planning by setting `collaborationMode = "collaborative"`.
+
 ### Web search agent
 
 The CLI now auto-loads a lightweight Web Search assistant (unless `enableWebSearchAgent = false` in `config.toml`). Any agent can trigger a search by emitting `WEB_SEARCH: describe the query` in its response; the wrapper strips the directive from user-visible output and forwards the request. Include optional guidance inside brackets, for example `WEB_SEARCH[focus: security]: oauth pkce audit`. When `webSearchModel = "codex"` the assistant runs `codex --web-search` directly; other models reuse their usual CLI with a research prompt and return a concise report via a direct team message.
@@ -47,3 +59,27 @@ During the planning phase the coordinator assigns each agent a primary focus (e.
 
 - `/settings` – open the active `~/.work-together/config.toml` in your default editor
 - `/stats` – show live phase, turn, and feed counters without kicking off a new run
+
+## Publishing to npm
+
+The package is configured for the scoped name `@procreations-official/work-together`. To publish via GitHub:
+
+1. Create an automation token on npm with at least _automation_ access (`https://www.npmjs.com/settings/<your-user>/tokens`).
+2. In the GitHub repository settings, add a secret called `NPM_TOKEN` containing that token.
+3. Tag a release (`git tag v0.1.0` then `git push --tags`) or create a GitHub release. The `Publish to npm` workflow runs the test suite and executes `npm publish` using the token.
+
+You can also publish manually from your workstation:
+
+```bash
+npm ci
+npm test
+npm publish --access public
+```
+
+Install the CLI via:
+
+```bash
+npm install -g @procreations-official/work-together
+```
+
+> ℹ️ npm scopes are case-insensitive, so `@ProCreations-Official/work-together` works in install commands even though the package is published under the lowercase scope.

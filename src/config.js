@@ -23,6 +23,8 @@ const DEFAULT_CONFIG = {
     qwenUseApiKey: false,
     enableWebSearchAgent: true,
     webSearchModel: 'codex',
+    collaborationMode: 'collaborative',
+    variantSelectionMode: 'manual',
   },
   preferences: {
     colorScheme: 'default',
@@ -35,6 +37,9 @@ const DEFAULT_CONFIG = {
 const CONFIG_HEADER = `# Work-Together CLI Configuration
 # Set autoSelectAgents = true to skip the agent picker and always load the agents listed in defaultAgents.
 # Set enableWebSearchAgent = false to disable the built-in research assistant.
+# Set collaborationMode = "variant" to have each agent propose an end-to-end solution before selecting one.
+# When collaborationMode = "variant", set variantSelectionMode to "manual" (you choose) or "auto" (the review agent chooses).
+# You can toggle collaborationMode in the CLI at any time with Ctrl+V; the selection is saved here.
 # Restart the CLI after changing any settings.
 `;
 
@@ -154,6 +159,12 @@ function mergeConfig(parsed) {
     config.settings.defaultAgents = [];
   }
   config.settings.defaultAgents = config.settings.defaultAgents.map(String);
+
+  const mode = String(config.settings.collaborationMode || '').toLowerCase();
+  config.settings.collaborationMode = mode === 'variant' ? 'variant' : 'collaborative';
+
+  const selectionMode = String(config.settings.variantSelectionMode || '').toLowerCase();
+  config.settings.variantSelectionMode = selectionMode === 'auto' ? 'auto' : 'manual';
 
   const timeout = Number(config.preferences.actionTimeoutMs);
   config.preferences.actionTimeoutMs = Number.isFinite(timeout) && timeout >= 0 ? timeout : 0;

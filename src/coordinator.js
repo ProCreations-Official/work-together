@@ -1,4 +1,6 @@
 import { randomUUID } from 'crypto';
+import fs from 'fs-extra';
+import path from 'path';
 import { createMessageBus } from './message-bus.js';
 import { AgentRegistry } from './agents/registry.js';
 import { SessionLogger } from './session-logger.js';
@@ -14,6 +16,9 @@ export class Coordinator {
     this.session = null;
     this.statusSubscribers = new Set();
     this.planningSubscribers = new Set();
+    this.variantSelectionSubscribers = new Set();
+    this.pendingVariantSelection = null;
+    this.mode = this.config.settings?.collaborationMode === 'variant' ? 'variant' : 'collaborative';
 
     this.messageBus.onStatus((update) => this.handleStatusUpdate(update));
     this.messageBus.onPlanning((update) => this.handlePlanningUpdate(update));
@@ -56,6 +61,8 @@ export class Coordinator {
       plan: null,
       assignments: null,
       transcripts: null,
+      mode: this.mode,
+      variant: null,
     };
 
     this.assignRoles(activeAgents);
@@ -89,6 +96,10 @@ export class Coordinator {
     return this.session;
   }
 
+  getCollaborationMode() {
+    return this.mode;
+  }
+
   subscribeToStatus(listener) {
     this.statusSubscribers.add(listener);
     return () => this.statusSubscribers.delete(listener);
@@ -97,6 +108,32 @@ export class Coordinator {
   subscribeToPlanning(listener) {
     this.planningSubscribers.add(listener);
     return () => this.planningSubscribers.delete(listener);
+  }
+
+  subscribeToVariantSelection(listener) {
+    this.variantSelectionSubscribers.add(listener);
+    return () => this.variantSelectionSubscribers.delete(listener);
+  }
+
+  notifyVariantSelection(request) {
+    this.variantSelectionSubscribers.forEach((listener) => listener(request));
+  }
+
+  setCollaborationMode(mode) {
+    const normalized = mode === 'variant' ? 'variant' : 'collaborative';
+    this.mode = normalized;
+    if (this.session) {
+      this.session.mode = normalized;
+    }
+    if (this.config?.settings) {
+      this.config.settings.collaborationMode = normalized;
+    }
+    if (normalized !== 'variant' && this.pendingVariantSelection) {
+      const pending = this.pendingVariantSelection;
+      this.pendingVariantSelection = null;
+      pending.resolve?.({ type: 'auto' });
+    }
+    return this.mode;
   }
 
   handleStatusUpdate(update) {
@@ -185,6 +222,9 @@ export class Coordinator {
 
   async runPlanningPhase() {
     if (!this.session) throw new Error('Session not initialised');
+    if (this.mode === 'variant') {
+      return this.runVariantPlanningPhase();
+    }
 
     this.logger?.info('=== PLANNING PHASE START ===');
 
@@ -232,6 +272,311 @@ export class Coordinator {
     this.messageBus.emitPlanning({ stage: 'final-division', assignments });
     this.logger?.info('=== PLANNING PHASE COMPLETE ===');
     return this.session.plan;
+  }
+
+  async runVariantPlanningPhase() {
+    if (!this.session) throw new Error('Session not initialised');
+    this.logger?.info('=== VARIANT MODE START ===');
+
+    this.logger?.info('Variant Step 1: Gathering private plans from each agent');
+    const plans = await this.agentRegistry.runGeneratePlans({ userPrompt: this.session.userPrompt });
+    const planMap = new Map();
+    plans.forEach((entry) => planMap.set(entry.agentId, entry.plan));
+
+    this.logger?.info('Variant Step 2: Preparing dedicated workspaces for each agent');
+    const projectSlug = this.deriveVariantProjectSlug();
+    const workspaceDir = await this.prepareVariantWorkspace(projectSlug);
+    const assignments = {};
+    const directories = {};
+    for (const agent of this.session.agents) {
+      const folderName = this.buildAgentFolderName(agent.name || agent.id, projectSlug);
+      const projectDir = path.join(workspaceDir, folderName);
+      await fs.ensureDir(projectDir);
+      directories[agent.id] = { projectDir, folderName };
+      assignments[agent.id] = this.buildVariantAssignment({
+        agentName: agent.name || agent.id,
+        projectDir,
+        userPrompt: this.session.userPrompt,
+      });
+    }
+
+    this.logger?.info('Variant Step 3: Executing independent variants');
+    const timeoutMs = this.config.preferences?.actionTimeoutMs || 0;
+    const transcripts = await this.agentRegistry.executeAssignments(assignments, { timeoutMs });
+
+    const results = transcripts.map((entry, index) => {
+      const directory = directories[entry.agentId] || {};
+      return {
+        agentId: entry.agentId,
+        agentName: this.formatAgentLabel(entry.agentId),
+        projectDir: directory.projectDir || null,
+        folderName: directory.folderName || null,
+        transcript: entry.transcript,
+        plan: planMap.get(entry.agentId) || '',
+        order: index + 1,
+      };
+    });
+
+    const summaryLines = results.map(
+      (result) =>
+        `${result.order}. ${result.agentName || result.agentId}${
+          result.projectDir ? ` → ${result.projectDir}` : ''
+        }`
+    );
+    this.messageBus.emitPlanning({
+      stage: 'variant-results',
+      agentId: 'coordinator',
+      plan: ['Variant outputs ready:', ...summaryLines].join('\n'),
+    });
+
+    this.session.plan = {
+      initial: plans,
+      consolidated: null,
+      allocations: [],
+      variant: {
+        projectSlug,
+        workspaceDir,
+        results,
+        selection: null,
+      },
+    };
+    this.session.assignments = null;
+    this.session.transcripts = transcripts;
+    this.session.variant = {
+      projectSlug,
+      workspaceDir,
+      results,
+      selection: null,
+    };
+
+    const selection = await this.resolveVariantSelection(results);
+    const selectedResult = selection.entry;
+    const selectedAgentId = selection.agentId;
+    const selectedAgentLabel = this.formatAgentLabel(selectedAgentId);
+
+    const consolidatedText = [
+      `Selected variant (${selection.mode === 'manual' ? 'manual' : 'auto'}): ${selectedAgentLabel}`,
+      selectedResult?.projectDir ? `Project directory: ${selectedResult.projectDir}` : null,
+      selection.rationale ? `Reason: ${selection.rationale}` : null,
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    this.messageBus.emitPlanning({
+      stage: 'variant-selected',
+      agentId: selectedAgentId,
+      plan: consolidatedText,
+    });
+
+    this.session.plan.consolidated = { summary: consolidatedText, variant: selectedResult };
+    this.session.variant.selection = {
+      agentId: selectedAgentId,
+      rationale: selection.rationale,
+      mode: selection.mode,
+      projectDir: selectedResult?.projectDir || null,
+    };
+    if (this.session.plan.variant) {
+      this.session.plan.variant.selection = {
+        agentId: selectedAgentId,
+        rationale: selection.rationale,
+        mode: selection.mode,
+        projectDir: selectedResult?.projectDir || null,
+      };
+    }
+
+    this.logger?.info('=== VARIANT MODE COMPLETE ===');
+    return this.session.plan;
+  }
+
+  async resolveVariantSelection(results) {
+    if (!results?.length) {
+      throw new Error('No variant results available for selection.');
+    }
+    const preference = this.config.settings?.variantSelectionMode === 'auto' ? 'auto' : 'manual';
+
+    if (preference === 'manual') {
+      const manualResult = await this.awaitManualVariantSelection(results);
+      if (manualResult?.type === 'manual') {
+        const chosen = results.find((entry) => entry.agentId === manualResult.agentId);
+        if (chosen) {
+          return {
+            agentId: chosen.agentId,
+            entry: chosen,
+            mode: 'manual',
+            rationale: manualResult.note || 'Chosen by user during variant selection.',
+          };
+        }
+        this.logger?.warn({ selection: manualResult }, 'Manual selection did not match any plan; falling back to auto.');
+      } else if (manualResult?.type === 'auto') {
+        this.logger?.info('Manual selection delegated to automatic choice.');
+        return this.autoSelectVariant(results);
+      }
+    }
+
+    return this.autoSelectVariant(results);
+  }
+
+  async awaitManualVariantSelection(results) {
+    const requestId = randomUUID();
+    const options = results.map((entry, index) => ({
+      agentId: entry.agentId,
+      agentName: entry.agentName || entry.agentId,
+      index: index + 1,
+      projectDir: entry.projectDir || 'unknown project directory',
+    }));
+
+    this.logger?.info({ requestId, options }, 'Awaiting manual variant selection');
+
+    const messageLines = options.map(
+      (option) => `${option.index}. ${option.agentName} (${option.agentId}) → ${option.projectDir}`
+    );
+    this.messageBus.emitPlanning({
+      stage: 'variant-selection-request',
+      agentId: 'coordinator',
+      plan: `Variant mode: choose the final result to adopt.\n${messageLines.join('\n')}\nType the number or agent id, or "auto" to delegate.`,
+    });
+
+    const pendingPromise = new Promise((resolve) => {
+      this.pendingVariantSelection = {
+        requestId,
+        options,
+        results,
+        resolve,
+      };
+    });
+
+    this.notifyVariantSelection({
+      requestId,
+      options,
+      selectionMode: 'manual',
+    });
+
+    return pendingPromise;
+  }
+
+  async autoSelectVariant(results) {
+    if (!results?.length) {
+      throw new Error('No variant results available for selection.');
+    }
+    const reviewAgentId = this.session?.reviewAgentId;
+    if (reviewAgentId) {
+      const preferred = results.find((entry) => entry.agentId === reviewAgentId);
+      if (preferred) {
+        return {
+          agentId: preferred.agentId,
+          entry: preferred,
+          mode: 'auto',
+          rationale: `Defaulted to review agent ${this.formatAgentLabel(reviewAgentId)}.`,
+        };
+      }
+    }
+    const fallback = results[0];
+    return {
+      agentId: fallback.agentId,
+      entry: fallback,
+      mode: 'auto',
+      rationale: `Used first available result (${this.formatAgentLabel(fallback.agentId)}).`,
+    };
+  }
+
+  submitVariantSelection(requestId, rawValue) {
+    const pending = this.pendingVariantSelection;
+    if (!pending || pending.requestId !== requestId) {
+      return { success: false, error: 'No active variant selection request.' };
+    }
+    const value = typeof rawValue === 'string' ? rawValue.trim() : '';
+    if (!value) {
+      return { success: false, error: 'Please enter a selection.' };
+    }
+
+    const normalised = value.toLowerCase();
+    if (normalised === 'auto') {
+      const resolution = { type: 'auto' };
+      pending.resolve(resolution);
+      this.pendingVariantSelection = null;
+      return { success: true, mode: 'auto', message: 'Delegated to automatic selection.' };
+    }
+
+    const match = pending.options.find(
+      (option) =>
+        option.agentId.toLowerCase() === normalised ||
+        option.agentName.toLowerCase() === normalised ||
+        String(option.index) === normalised
+    );
+
+    if (!match) {
+      return {
+        success: false,
+        error: `Unrecognised selection "${value}". Choose by number, agent id, agent name, or "auto".`,
+      };
+    }
+
+    pending.resolve({ type: 'manual', agentId: match.agentId, note: `User selected ${match.agentName}.` });
+    this.pendingVariantSelection = null;
+    return {
+      success: true,
+      mode: 'manual',
+      agentId: match.agentId,
+      message: `Selected variant from ${match.agentName}.`,
+    };
+  }
+
+  sanitiseForPath(value, fallback = 'item') {
+    if (!value) return fallback;
+    const cleaned = value
+      .toLowerCase()
+      .normalize('NFKD')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+/, '')
+      .replace(/-+$/, '')
+      .slice(0, 48);
+    return cleaned || fallback;
+  }
+
+  deriveVariantProjectSlug() {
+    const prompt = this.session?.userPrompt || '';
+    const core = prompt
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]+/g, ' ')
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 4)
+      .join('-');
+    return this.sanitiseForPath(core, 'project');
+  }
+
+  async prepareVariantWorkspace(projectSlug) {
+    const baseDir = this.baseDir || process.cwd();
+    const sessionSuffix = this.session?.id ? this.session.id.split('-')[0] : randomUUID().slice(0, 8);
+    const dirName = `variant-${projectSlug}-${sessionSuffix}`;
+    const workspaceDir = path.join(baseDir, dirName);
+    await fs.ensureDir(workspaceDir);
+    return workspaceDir;
+  }
+
+  buildAgentFolderName(agentName, projectSlug) {
+    const nameSlug = this.sanitiseForPath(agentName, 'agent');
+    return `${nameSlug}-${projectSlug}`;
+  }
+
+  buildVariantAssignment({ agentName, projectDir, userPrompt }) {
+    const promptText = userPrompt && userPrompt.trim() ? userPrompt.trim() : 'Follow the user prompt to deliver a complete solution.';
+    return [
+      `VARIANT MODE SOLO BUILD – ${agentName}`,
+      '',
+      `Prompt: ${promptText}`,
+      `Project directory: ${projectDir}`,
+      '',
+      'Instructions:',
+      `1. Work independently to deliver a complete, production-ready solution scoped to the prompt.`,
+      `2. Run all commands inside the project directory. Start by executing: cd ${projectDir}`,
+      '3. Keep all created or modified files within this directory. Do not touch other variant folders.',
+      '4. Produce any build/test artifacts locally inside your folder.',
+      '5. Finish with a concise summary of key deliverables and verification steps.',
+      '',
+      'Do not coordinate with other agents; each is building their own variant.',
+    ].join('\n');
   }
 
   synthesizePlans(plans) {
@@ -300,6 +645,10 @@ export class Coordinator {
 
   async runExecutionPhase() {
     if (!this.session) throw new Error('Session not initialised');
+    if (this.mode === 'variant') {
+      this.logger?.info('Variant mode: execution already completed during planning; skipping.');
+      return this.session?.variant?.results || this.session?.transcripts || [];
+    }
     if (!this.session.assignments) throw new Error('Assignments not ready');
 
     const transcripts = await this.agentRegistry.executeAssignments(this.session.assignments, { timeoutMs: 0 });
