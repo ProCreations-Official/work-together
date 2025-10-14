@@ -1,6 +1,6 @@
 {
   "name": "@pro-creations/work-together",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Coordinator CLI enabling Claude Code, OpenAI Codex, and OpenCode agents to collaborate on coding tasks.",
   "type": "module",
   "bin": {
