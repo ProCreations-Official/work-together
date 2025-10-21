@@ -111,28 +111,39 @@ While the CLI is running, use these commands:
 - `Ctrl+V` - Toggle collaboration mode (collaborative/variant)
 - `Tab` - Cycle through panels (Activity Feed/Messages/Planning)
 
-## Troubleshooting
+## Node.js Version Compatibility
 
-### Node.js 23 Compatibility
+Work-Together includes **automatic Node.js version detection**:
 
-If you're using Node.js v23 and encounter React/Ink errors, try one of these solutions:
+### ✅ Node.js 18-22 (Full Support)
+- Full interactive UI with Ink/React
+- Real-time status panels
+- All features available
 
-**Option 1: Use Node.js LTS (Recommended)**
+### ⚠️ Node.js 23+ (Fallback Mode)
+- **Automatically uses simple console demo**
+- No React/Ink dependencies needed
+- Still shows the full workflow
+- Works out of the box!
+
+**The CLI automatically detects your Node version and chooses the best demo mode.**
+
+### Recommended: Use Node.js LTS
+
+For the full interactive experience with real agents:
+
 ```bash
 # Use nvm to switch to Node LTS
-nvm use --lts
+nvm use --lts  # or: nvm use 20
+
+# Then run normally
 npx @pro-creations/work-together --demo
 ```
 
-**Option 2: Install locally with npm overrides**
-```bash
-npm install -g @pro-creations/work-together
-work-together --demo
-```
+**Why Node.js 20 LTS?**
+- Fully compatible with React/Ink ecosystem
+- Long-term support and stability
+- Recommended for production use
+- All features work perfectly
 
-**Option 3: Use legacy peer deps flag**
-```bash
-npx --legacy-peer-deps @pro-creations/work-together --demo
-```
-
-Node.js 23 is very new and some dependencies may not be fully compatible yet. We recommend using Node.js 18 LTS or Node.js 20 LTS for the best experience.
+Node.js 23 is very new (released November 2024) and the React/Ink ecosystem hasn't caught up yet. The simple console demo provides the same functionality without the interactive UI.

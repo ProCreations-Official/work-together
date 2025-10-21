@@ -16,6 +16,25 @@ import { initializeConfig } from './config.js';
 import { Coordinator } from './coordinator.js';
 import { launchCLI } from './ui/cli.js';
 import { createMockCoordinator, createMockConfig } from './demo-mode.js';
+import { runSimpleDemo } from './simple-demo.js';
+
+/**
+ * Gets the current Node.js major version
+ * @returns {number} Major version number
+ */
+function getNodeMajorVersion() {
+  return parseInt(process.versions.node.split('.')[0], 10);
+}
+
+/**
+ * Checks if Ink/React UI is compatible with current Node version
+ * @returns {boolean} True if compatible
+ */
+function isInkCompatible() {
+  const nodeMajor = getNodeMajorVersion();
+  // Ink/React works well on Node 18-22, but has issues on Node 23+
+  return nodeMajor >= 18 && nodeMajor <= 22;
+}
 
 /**
  * Parses command line arguments
@@ -149,6 +168,21 @@ async function promptAgentSelection(discovered, config) {
  * Runs the CLI in demo mode with mock data
  */
 async function runDemoMode() {
+  const nodeMajor = getNodeMajorVersion();
+
+  // Check if we need to use the simple demo for Node v23+
+  if (!isInkCompatible()) {
+    console.log(chalk.yellow(`\n  ⚠ Node.js v${nodeMajor} detected`));
+    console.log(chalk.dim('  ▸ Using simple console demo (React/Ink not compatible with Node v23+)'));
+    console.log(chalk.dim('  ▸ For full interactive UI, use Node.js 18-22 LTS\n'));
+    await sleep(1500);
+
+    // Run the simple console-based demo
+    await runSimpleDemo();
+    return;
+  }
+
+  // Run the full Ink-based interactive demo for Node 18-22
   displayWelcome(true);
 
   console.log(chalk.dim('  Initializing demo environment...'));
@@ -186,10 +220,32 @@ async function runDemoMode() {
 }
 
 /**
+ * Helper to sleep
+ * @param {number} ms - Milliseconds to sleep
+ * @returns {Promise<void>}
+ */
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
  * Main bootstrap function that initializes and runs the CLI
  */
 async function bootstrap() {
   displayWelcome(false);
+
+  // Check Node version and warn if incompatible
+  const nodeMajor = getNodeMajorVersion();
+  if (!isInkCompatible()) {
+    console.log(chalk.yellow(`  ⚠ Warning: Node.js v${nodeMajor} detected`));
+    console.log(chalk.dim('  ▸ The interactive UI requires Node.js 18-22 LTS'));
+    console.log(chalk.dim('  ▸ You may encounter errors with the Ink/React interface'));
+    console.log(chalk.dim('  ▸ Recommended: Use Node.js 20 LTS for best experience'));
+    console.log(chalk.cyan('\n  ▸ Try demo mode instead:') + chalk.dim(' npx @pro-creations/work-together --demo\n'));
+
+    // Give user a chance to cancel
+    await sleep(2000);
+  }
 
   // Initialize configuration
   console.log(chalk.gray('Initializing configuration...'));
