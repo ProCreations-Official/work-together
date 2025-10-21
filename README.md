@@ -2,7 +2,27 @@
 
 A collaborative CLI that coordinates multiple AI coding agents – Claude Code, OpenAI Codex, Gemini CLI, Qwen Code, and OpenCode – to plan, negotiate, and execute development tasks in real time.
 
-## Installation
+> **[▸ Try the Interactive Demo](./docs/cli-demo.md)** - No setup required, see the sleek terminal UI in action!
+
+## Features
+
+- **Multi-Agent Collaboration**: Coordinate Claude, Codex, Gemini, Qwen, and OpenCode agents
+- **Sleek Terminal UI**: Professional interface inspired by Claude Code and Gemini CLI
+- **Real-Time Coordination**: Watch agents plan, negotiate, and execute tasks together
+- **Flexible Modes**: Collaborative or variant (independent solutions) workflows
+- **Demo Mode**: Try the interface instantly with no setup required
+
+## Quick Start
+
+### Try Demo Mode (No Setup Required)
+
+Experience the CLI design with simulated agents:
+
+```bash
+npx @pro-creations/work-together --demo
+```
+
+### Installation
 
 ```bash
 npm install -g @pro-creations/work-together
@@ -63,7 +83,30 @@ The CLI now auto-loads a lightweight Web Search assistant (unless `enableWebSear
 
 During the planning phase the coordinator assigns each agent a primary focus (e.g., front-end, back-end, automation, QA) and designates one agent as the _review_ owner for the session. The role roster is injected into every prompt so agents stay aligned, and non-review agents send a `TEAM_MSG[TO <review-agent>]` when their work is done. The review agent waits for those signals, reviews the final deliverable, and posts a summary `TEAM_MSG[GROUP]`—raising direct follow-ups if fixes are required.
 
-## Slash Commands
+## CLI Commands
 
-- `/settings` – open the active `~/.work-together/config.toml` in your default editor
-- `/stats` – show live phase, turn, and feed counters without kicking off a new run
+### Command-Line Options
+
+```bash
+work-together [options]
+```
+
+**Options:**
+- `--demo, --demo-mode` - Run in demo mode (no setup required)
+- `--help, -h` - Show help information
+
+### In-CLI Slash Commands
+
+While the CLI is running, use these commands:
+
+- `/help` - Show all available commands and keyboard shortcuts
+- `/settings` - Open configuration file in default editor
+- `/stats` - Display current session statistics
+
+### Keyboard Shortcuts
+
+- `Ctrl+C` - Exit application
+- `Ctrl+S` - Save session snapshot
+- `Ctrl+L` - Show log file location
+- `Ctrl+V` - Toggle collaboration mode (collaborative/variant)
+- `Tab` - Cycle through panels (Activity Feed/Messages/Planning)

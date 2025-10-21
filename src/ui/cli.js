@@ -579,7 +579,7 @@ function CoordinatorApp({ coordinator, config, session }) {
     ? React.createElement(
         Box,
         { borderStyle: 'round', borderColor: 'yellow', paddingX: 1, paddingY: 0 },
-        React.createElement(Text, null, `${chalk.yellow('ℹ')} ${notice}`)
+        React.createElement(Text, null, `${chalk.yellow('▸')} ${notice}`)
       )
     : null;
 

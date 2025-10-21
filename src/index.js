@@ -15,15 +15,66 @@ import chalk from 'chalk';
 import { initializeConfig } from './config.js';
 import { Coordinator } from './coordinator.js';
 import { launchCLI } from './ui/cli.js';
+import { createMockCoordinator, createMockConfig } from './demo-mode.js';
 
 /**
- * Displays a welcome banner with version and basic info
+ * Parses command line arguments
+ * @returns {Object} Parsed arguments
  */
-function displayWelcome() {
-  console.log(chalk.cyan.bold('\n╭─────────────────────────────────────────╮'));
-  console.log(chalk.cyan.bold('│     Work-Together CLI v1.0.4           │'));
-  console.log(chalk.cyan.bold('│     Multi-Agent Collaboration          │'));
-  console.log(chalk.cyan.bold('╰─────────────────────────────────────────╯\n'));
+function parseArgs() {
+  const args = process.argv.slice(2);
+  return {
+    demo: args.includes('--demo') || args.includes('--demo-mode'),
+    help: args.includes('--help') || args.includes('-h'),
+  };
+}
+
+/**
+ * Displays CLI help information
+ */
+function displayHelp() {
+  console.log(chalk.cyan.bold('\nWork-Together CLI\n'));
+  console.log(chalk.bold('Usage:'));
+  console.log('  work-together [options]\n');
+  console.log(chalk.bold('Options:'));
+  console.log('  --demo, --demo-mode    Run in demo mode (no setup required)');
+  console.log('  --help, -h             Show this help message\n');
+  console.log(chalk.bold('Examples:'));
+  console.log('  work-together          # Normal mode');
+  console.log('  work-together --demo   # Demo mode\n');
+}
+
+/**
+ * Displays a welcome banner with ASCII art logo (inspired by Claude Code style)
+ * @param {boolean} isDemoMode - Whether running in demo mode
+ */
+function displayWelcome(isDemoMode = false) {
+  // Sleek ASCII art logo with gradient colors
+  const logo = [
+    '  ██╗    ██╗ ██████╗ ██████╗ ██╗  ██╗    ████████╗ ██████╗  ██████╗ ███████╗████████╗██╗  ██╗███████╗██████╗ ',
+    '  ██║    ██║██╔═══██╗██╔══██╗██║ ██╔╝    ╚══██╔══╝██╔═══██╗██╔════╝ ██╔════╝╚══██╔══╝██║  ██║██╔════╝██╔══██╗',
+    '  ██║ █╗ ██║██║   ██║██████╔╝█████╔╝        ██║   ██║   ██║██║  ███╗█████╗     ██║   ███████║█████╗  ██████╔╝',
+    '  ██║███╗██║██║   ██║██╔══██╗██╔═██╗        ██║   ██║   ██║██║   ██║██╔══╝     ██║   ██╔══██║██╔══╝  ██╔══██╗',
+    '  ╚███╔███╔╝╚██████╔╝██║  ██║██║  ██╗       ██║   ╚██████╔╝╚██████╔╝███████╗   ██║   ██║  ██║███████╗██║  ██║',
+    '   ╚══╝╚══╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝       ╚═╝    ╚═════╝  ╚═════╝ ╚══════╝   ╚═╝   ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝',
+  ];
+
+  console.log('');
+  logo.forEach((line, i) => {
+    // Gradient effect from cyan to blue
+    const colors = [chalk.cyan, chalk.cyan, chalk.blue, chalk.blue, chalk.blue, chalk.cyan];
+    console.log(colors[i](line));
+  });
+
+  console.log('');
+  console.log(chalk.dim('  Multi-Agent Collaboration Platform') + chalk.cyan('  │  ') + chalk.dim('v1.0.4'));
+
+  if (isDemoMode) {
+    console.log('');
+    console.log(chalk.yellow('  ▸ DEMO MODE') + chalk.dim(' - Interactive showcase with simulated agents'));
+  }
+
+  console.log('\n' + chalk.dim('  ─'.repeat(55)) + '\n');
 }
 
 /**
@@ -95,10 +146,50 @@ async function promptAgentSelection(discovered, config) {
 }
 
 /**
+ * Runs the CLI in demo mode with mock data
+ */
+async function runDemoMode() {
+  displayWelcome(true);
+
+  console.log(chalk.dim('  Initializing demo environment...'));
+  console.log(chalk.dim('  No API keys or agent setup required\n'));
+
+  // Create mock coordinator and config
+  const coordinator = createMockCoordinator();
+  const config = createMockConfig();
+
+  // Create mock session with pre-selected agents
+  const session = await coordinator.initializeSession({
+    agentSelections: ['claude', 'codex', 'gemini'],
+    userPrompt: 'Build a user authentication system with JWT tokens and OAuth2 support',
+  });
+
+  console.log(chalk.green('  ✓ ') + chalk.dim('Demo session initialized'));
+  console.log(chalk.dim('  ├─ Agents: ') + chalk.cyan('Claude Code') + chalk.dim(', ') + chalk.green('OpenAI Codex') + chalk.dim(', ') + chalk.blue('Gemini CLI'));
+  console.log(chalk.dim('  └─ Task: ') + 'Build authentication system');
+  console.log('');
+
+  // Launch the CLI
+  try {
+    await launchCLI({ coordinator, config, session });
+  } catch (err) {
+    console.error(chalk.red('\n  ✖ Demo error:'), err.message || err);
+    process.exit(1);
+  } finally {
+    console.log(chalk.dim('\n  Session ended'));
+    await coordinator.shutdown({ id: session.id, completed: true });
+    console.log(chalk.green('  ✓ ') + chalk.dim('Cleanup complete'));
+    console.log('');
+    console.log(chalk.cyan('  ▸ To use with real agents:') + chalk.dim(' work-together'));
+    console.log(chalk.dim('  ▸ See setup guide: README.md\n'));
+  }
+}
+
+/**
  * Main bootstrap function that initializes and runs the CLI
  */
 async function bootstrap() {
-  displayWelcome();
+  displayWelcome(false);
 
   // Initialize configuration
   console.log(chalk.gray('Initializing configuration...'));
@@ -189,13 +280,34 @@ async function bootstrap() {
   }
 }
 
-// Handle uncaught errors gracefully
-bootstrap().catch((err) => {
-  console.error(chalk.red('\n✖ Fatal error:'), err.message || err);
-  if (err.stack && process.env.DEBUG) {
-    console.error(chalk.gray('\nStack trace:'));
-    console.error(chalk.gray(err.stack));
-  }
-  console.log(chalk.gray('\nSet DEBUG=1 environment variable for stack traces.'));
-  process.exit(1);
-});
+// Main entry point - parse args and route to appropriate mode
+const args = parseArgs();
+
+if (args.help) {
+  displayHelp();
+  process.exit(0);
+}
+
+if (args.demo) {
+  // Run in demo mode
+  runDemoMode().catch((err) => {
+    console.error(chalk.red('\n  ✖ Fatal error:'), err.message || err);
+    if (err.stack && process.env.DEBUG) {
+      console.error(chalk.gray('\n  Stack trace:'));
+      console.error(chalk.gray('  ' + err.stack.split('\n').join('\n  ')));
+    }
+    console.log(chalk.dim('\n  Set DEBUG=1 for stack traces\n'));
+    process.exit(1);
+  });
+} else {
+  // Run in normal mode
+  bootstrap().catch((err) => {
+    console.error(chalk.red('\n  ✖ Fatal error:'), err.message || err);
+    if (err.stack && process.env.DEBUG) {
+      console.error(chalk.gray('\n  Stack trace:'));
+      console.error(chalk.gray('  ' + err.stack.split('\n').join('\n  ')));
+    }
+    console.log(chalk.dim('\n  Set DEBUG=1 for stack traces\n'));
+    process.exit(1);
+  });
+}

@@ -15,17 +15,17 @@ const AGENT_COLORS = {
 };
 
 /**
- * Icons for different action types
+ * Icons for different action types (using ASCII characters for sleek professional look)
  */
 const ACTION_ICONS = {
-  init: '🚀',
-  plan: '📋',
-  exec: '⚙️',
-  complete: '✅',
-  error: '❌',
-  'team-message': '💬',
-  message: '📨',
-  request: '🔍',
+  init: '▸',
+  plan: '■',
+  exec: '▪',
+  complete: '✓',
+  error: '✖',
+  'team-message': '→',
+  message: '◆',
+  request: '?',
 };
 
 /**
@@ -256,16 +256,16 @@ export function PlanningFeed({ entries, focused }) {
 }
 
 /**
- * Maps phase values to display names and icons
+ * Maps phase values to display names and icons (sleek ASCII style)
  */
 const PHASE_CONFIG = {
-  idle: { name: 'READY', icon: '⏸', color: 'cyan' },
-  planning: { name: 'PLANNING', icon: '📋', color: 'yellow' },
-  variant: { name: 'VARIANT MODE', icon: '🧪', color: 'magenta' },
-  'variant-selection': { name: 'SELECTION', icon: '❓', color: 'yellow' },
-  execution: { name: 'EXECUTING', icon: '⚙️', color: 'blue' },
-  complete: { name: 'COMPLETE', icon: '✅', color: 'green' },
-  error: { name: 'ERROR', icon: '❌', color: 'red' },
+  idle: { name: 'READY', icon: '◐', color: 'cyan' },
+  planning: { name: 'PLANNING', icon: '■', color: 'yellow' },
+  variant: { name: 'VARIANT MODE', icon: '◆', color: 'magenta' },
+  'variant-selection': { name: 'SELECTION', icon: '?', color: 'yellow' },
+  execution: { name: 'EXECUTING', icon: '▸', color: 'blue' },
+  complete: { name: 'COMPLETE', icon: '✓', color: 'green' },
+  error: { name: 'ERROR', icon: '✖', color: 'red' },
 };
 
 /**
@@ -286,10 +286,10 @@ function getAgentDisplayStatus(item, phase) {
       return chalk.green('✓ Ready');
     }
     if (status.includes('Negotiating') || status.includes('split')) {
-      return chalk.yellow('⚙ Negotiating');
+      return chalk.yellow('▪ Negotiating');
     }
     if (status.includes('Drafting')) {
-      return chalk.blue('📝 Planning');
+      return chalk.blue('■ Planning');
     }
   }
 
@@ -298,7 +298,7 @@ function getAgentDisplayStatus(item, phase) {
       return chalk.green('✓ Done');
     }
     if (status.includes('Executing')) {
-      return chalk.blue('⚙ Working');
+      return chalk.blue('▸ Working');
     }
   }
 
