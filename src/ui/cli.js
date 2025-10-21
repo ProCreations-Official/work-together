@@ -1,9 +1,38 @@
+/**
+ * Work-Together CLI Interface
+ *
+ * A terminal-based collaborative AI coding interface inspired by Claude Code's
+ * design principles: simplicity, transparency, and keyboard-first interaction.
+ *
+ * @module ui/cli
+ */
+
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { render, Box, Text, useApp, useInput } from 'ink';
 import TextInput from 'ink-text-input';
 import chalk from 'chalk';
 import { spawn } from 'child_process';
 import { Header, StatusFeed, UserMessages, PlanningFeed, AgentProgress } from './status-display.js';
+
+/**
+ * Available slash commands
+ */
+const SLASH_COMMANDS = {
+  settings: 'Open configuration file in default editor',
+  stats: 'Display current session statistics',
+  help: 'Show available commands and keyboard shortcuts',
+};
+
+/**
+ * Keyboard shortcuts help text
+ */
+const KEYBOARD_SHORTCUTS = {
+  'Ctrl+C': 'Exit application',
+  'Ctrl+S': 'Save session snapshot',
+  'Ctrl+L': 'Show log file location',
+  'Ctrl+V': 'Toggle collaboration mode (collaborative/variant)',
+  'Tab': 'Cycle through panels (Activity/Messages/Planning)',
+};
 
 function CoordinatorApp({ coordinator, config, session }) {
   const { exit } = useApp();
@@ -127,29 +156,56 @@ function CoordinatorApp({ coordinator, config, session }) {
     }
   };
 
+  /**
+   * Handles slash command execution
+   * @param {string} rawCommand - The command string (including leading /)
+   */
   const handleSlashCommand = (rawCommand) => {
     const command = rawCommand.slice(1).trim().toLowerCase();
+
     if (!command) {
-      setNotice('Empty command. Try /settings or /stats.');
+      setNotice('Type a command after /. Try /help for available commands.');
       setWaitingForInput(true);
       setInputValue('');
       return;
     }
 
-    if (command === 'settings') {
-      openSettingsFile();
-    } else if (command === 'stats') {
-      const stats = [
-        `Phase: ${phase.toUpperCase()}`,
-        `Turn: ${turnNumber}`,
-        `Status entries: ${statusFeed.length}`,
-        `User messages: ${userMessages.length}`,
-        `Planning updates: ${planningFeed.length}`,
-      ];
-      setError(null);
-      setNotice(`Stats → ${stats.join(' • ')}`);
-    } else {
-      setNotice(`Unknown command "${rawCommand}". Available commands: /settings, /stats.`);
+    setError(null);
+
+    switch (command) {
+      case 'settings':
+        openSettingsFile();
+        break;
+
+      case 'stats': {
+        const stats = [
+          `Phase: ${chalk.cyan(phase.toUpperCase())}`,
+          `Turn: ${chalk.yellow(turnNumber)}`,
+          `Activity: ${chalk.green(statusFeed.length)} entries`,
+          `Messages: ${chalk.green(userMessages.length)}`,
+          `Planning: ${chalk.green(planningFeed.length)} updates`,
+        ];
+        setNotice(`📊 Session Statistics\n${stats.join(' • ')}`);
+        break;
+      }
+
+      case 'help': {
+        const commandsList = Object.entries(SLASH_COMMANDS)
+          .map(([cmd, desc]) => `  ${chalk.cyan('/' + cmd)} - ${desc}`)
+          .join('\n');
+        const shortcutsList = Object.entries(KEYBOARD_SHORTCUTS)
+          .map(([key, desc]) => `  ${chalk.cyan(key)} - ${desc}`)
+          .join('\n');
+        setNotice(
+          `${chalk.bold('Available Commands:')}\n${commandsList}\n\n${chalk.bold('Keyboard Shortcuts:')}\n${shortcutsList}`
+        );
+        break;
+      }
+
+      default:
+        setNotice(
+          `Unknown command: ${chalk.red(rawCommand)}\nType ${chalk.cyan('/help')} to see available commands.`
+        );
     }
 
     setWaitingForInput(true);
@@ -518,31 +574,35 @@ function CoordinatorApp({ coordinator, config, session }) {
     [focusIndex]
   );
 
+  // Notice/info messages (yellow/cyan for informational content)
   const noticeElement = notice
     ? React.createElement(
         Box,
-        { borderStyle: 'round', borderColor: 'yellow', paddingX: 1 },
-        React.createElement(Text, { color: 'yellow' }, notice)
-      )
-    : null;
-  const errorElement = error
-    ? React.createElement(
-        Box,
-        { borderStyle: 'round', borderColor: 'red', paddingX: 1 },
-        React.createElement(Text, { color: 'red' }, String(error))
+        { borderStyle: 'round', borderColor: 'yellow', paddingX: 1, paddingY: 0 },
+        React.createElement(Text, null, `${chalk.yellow('▸')} ${notice}`)
       )
     : null;
 
+  // Error messages (red for errors)
+  const errorElement = error
+    ? React.createElement(
+        Box,
+        { borderStyle: 'round', borderColor: 'red', paddingX: 1, paddingY: 0 },
+        React.createElement(Text, null, `${chalk.red('✖')} ${chalk.red(String(error))}`)
+      )
+    : null;
+
+  // Input prompt (clean and minimal)
   const inputElement = waitingForInput
     ? React.createElement(
         Box,
-        { borderStyle: 'round', borderColor: 'cyan', paddingX: 1 },
-        React.createElement(Text, { color: 'cyan', bold: true }, '› '),
+        { borderStyle: 'round', borderColor: 'cyan', paddingX: 1, paddingY: 0 },
+        React.createElement(Text, { color: 'cyan', bold: true }, '❯ '),
         React.createElement(TextInput, {
           value: inputValue,
           onChange: setInputValue,
           onSubmit: handleSubmit,
-          placeholder: 'Type your next prompt...'
+          placeholder: 'Type your prompt or /help for commands...',
         })
       )
     : null;
@@ -566,11 +626,24 @@ function CoordinatorApp({ coordinator, config, session }) {
     inputElement,
     React.createElement(
       Box,
-      null,
-      React.createElement(Text, { color: 'gray', dimColor: true }, `Ctrl+C exit • Ctrl+S save • Ctrl+L log • Tab: ${focusIndex === 0 ? 'Status' : focusIndex === 1 ? 'Messages' : 'Planning'}`)
+      { borderStyle: 'single', borderColor: 'gray', paddingX: 1 },
+      React.createElement(
+        Text,
+        { color: 'gray', dimColor: true },
+        `${chalk.dim('Shortcuts:')} ${chalk.white('Ctrl+C')} exit • ${chalk.white('Ctrl+S')} save • ${chalk.white('Ctrl+V')} mode • ${chalk.white('Tab')} panels • ${chalk.white('/help')} commands`
+      )
     )
   );
 }
+
+/**
+ * Launches the CLI application with the Ink renderer
+ * @param {Object} options - Configuration options
+ * @param {Object} options.coordinator - The coordinator instance
+ * @param {Object} options.config - Configuration object
+ * @param {Object} options.session - Session object
+ * @returns {Promise<Object>} Session result
+ */
 
 export async function launchCLI({ coordinator, config, session }) {
   const app = render(React.createElement(CoordinatorApp, { coordinator, config, session }));
