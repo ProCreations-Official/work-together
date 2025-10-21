@@ -110,3 +110,29 @@ While the CLI is running, use these commands:
 - `Ctrl+L` - Show log file location
 - `Ctrl+V` - Toggle collaboration mode (collaborative/variant)
 - `Tab` - Cycle through panels (Activity Feed/Messages/Planning)
+
+## Troubleshooting
+
+### Node.js 23 Compatibility
+
+If you're using Node.js v23 and encounter React/Ink errors, try one of these solutions:
+
+**Option 1: Use Node.js LTS (Recommended)**
+```bash
+# Use nvm to switch to Node LTS
+nvm use --lts
+npx @pro-creations/work-together --demo
+```
+
+**Option 2: Install locally with npm overrides**
+```bash
+npm install -g @pro-creations/work-together
+work-together --demo
+```
+
+**Option 3: Use legacy peer deps flag**
+```bash
+npx --legacy-peer-deps @pro-creations/work-together --demo
+```
+
+Node.js 23 is very new and some dependencies may not be fully compatible yet. We recommend using Node.js 18 LTS or Node.js 20 LTS for the best experience.
